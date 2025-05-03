@@ -18,7 +18,10 @@ export default function LoginPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(undefined);
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+    // ← updated line here
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+
     if (error) {
       setError(error.message);
     } else {
@@ -36,7 +39,7 @@ export default function LoginPage() {
           <input
             type="email"
             value={email}
-            onChange={e=>setEmail(e.target.value)}
+            onChange={e => setEmail(e.target.value)}
             className="w-64 p-2 border rounded"
             required
           />
@@ -46,7 +49,7 @@ export default function LoginPage() {
           <input
             type="password"
             value={password}
-            onChange={e=>setPassword(e.target.value)}
+            onChange={e => setPassword(e.target.value)}
             className="w-64 p-2 border rounded"
             required
           />
