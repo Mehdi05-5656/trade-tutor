@@ -1,55 +1,30 @@
-export const runtime = 'edge';
+// src/app/api/analyze/route.ts
+import { NextResponse } from 'next/server'
+import { Configuration, OpenAIApi } from 'openai'
 
-import { NextResponse } from 'next/server';
-import Replicate from 'replicate';
+export const runtime = 'edge'
 
 export async function POST(request: Request) {
-  // 1) Parse the uploaded file
-  const formData = await request.formData();
-  const file = formData.get('file') as Blob;
+  // 1) Receive the uploaded file
+  const formData = await request.formData()
+  const file = formData.get('file') as File
   if (!file) {
-    return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
+    return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
   }
 
-  // 2) Host it on Replicate's file store
-  const replicate = new Replicate({
-    auth: process.env.REPLICATE_API_TOKEN!,
-  });
-  const fileRes = await replicate.files.create(file);
-  const imageUrl = fileRes.urls.get;
+  // 2) Convert it to a base64 data URI
+  const arrayBuffer = await file.arrayBuffer()
+  const b64 = Buffer.from(arrayBuffer).toString('base64')
+  const imageDataUri = `data:${file.type};base64,${b64}`
 
-  // 3) Ask ChatGPT to analyze the chart
-  const prompt = `
-You are a patient, clear trading coach. A user gave you a chart:
-${imageUrl}
+  // 3) Call ChatGPT Vision (you need OPENAI_API_KEY in your env)
+  const openai = new OpenAIApi(
+    new Configuration({ apiKey: process.env.OPENAI_API_KEY })
+  )
 
-Please:
-1) Identify any Fair Value Gaps and describe them.
-2) State whether the market bias is bullish or bearish.
-3) Recommend an entry price, a stop-loss, and a take-profit.
-4) Explain in a teaching style so the user learns how you arrived at each point.
-`;
-  const chatRes = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 300,
-    }),
-  });
-
-  if (!chatRes.ok) {
-    const err = await chatRes.text();
-    return NextResponse.json({ error: err }, { status: chatRes.status });
-  }
-
-  const { choices } = await chatRes.json();
-  const analysis = choices[0].message.content as string;
-
-  // 4) Return as a single string
-  return NextResponse.json({ analysis });
-}
+  const completion = await openai.createChatCompletion({
+    model: 'gpt-4o-mini',
+    messages: [
+      {
+        role: 'system',
+        content: `
