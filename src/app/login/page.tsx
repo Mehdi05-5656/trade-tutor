@@ -1,4 +1,7 @@
+// src/app/login/page.tsx
+
 'use client';
+export const dynamic = 'force-dynamic';
 
 import { useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
@@ -13,15 +16,12 @@ export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string|undefined>();
+  const [error, setError] = useState<string | undefined>();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(undefined);
-
-    // ← updated line here
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-
     if (error) {
       setError(error.message);
     } else {
