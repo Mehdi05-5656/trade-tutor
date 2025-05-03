@@ -1,7 +1,7 @@
 // src/components/ImageUploader.tsx
 'use client'
 
-import { useState, ChangeEvent } from 'react'
+import { useState, useCallback, DragEvent, ChangeEvent } from 'react'
 
 interface AnalysisData {
   marketSession?: string
@@ -16,110 +16,143 @@ interface AnalysisData {
 }
 
 export default function ImageUploader() {
+  const [dragOver, setDragOver] = useState(false)
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<AnalysisData | null>(null)
-  const [raw, setRaw] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  async function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
+  const handleFiles = useCallback(async (file: File) => {
     setError(null)
-    setRaw(null)
     setData(null)
-
-    const file = e.target.files?.[0] ?? null
-    if (!file) return
-
     setLoading(true)
+
+    const form = new FormData()
+    form.append('file', file)
+
     try {
-      const form = new FormData()
-      form.append('file', file)
       const res = await fetch('/api/analyze', { method: 'POST', body: form })
       const json = await res.json()
 
       if (!res.ok) {
-        setError(json.error || 'Analysis failed')
-      } else if ('raw' in json) {
-        setRaw(json.raw)
-      } else {
-        setData(json as AnalysisData)
+        throw new Error(json.error || 'Analysis failed')
       }
+      // if the API returned { raw: string } it will show under `.analysis`
+      setData(json)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Network error')
     } finally {
       setLoading(false)
     }
+  }, [])
+
+  function onDrop(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault()
+    setDragOver(false)
+    const file = e.dataTransfer.files[0]
+    if (file) handleFiles(file)
+  }
+
+  function onDragOver(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault()
+    setDragOver(true)
+  }
+
+  function onDragLeave() {
+    setDragOver(false)
+  }
+
+  function onFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (file) handleFiles(file)
   }
 
   return (
-    <div className="space-y-4">
-      <input
-        type="file"
-        accept="image/*"
-        onChange={handleFileChange}
-        className="block"
-      />
+    <div className="space-y-6">
+      <div
+        onDrop={onDrop}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        className={`relative border-2 border-dashed rounded-lg p-16 text-center cursor-pointer transition 
+          ${dragOver ? 'border-blue-500 bg-blue-50' : 'border-gray-300 bg-white'}
+          ${loading ? 'opacity-50 pointer-events-none' : ''}
+        `}
+        onClick={() => document.getElementById('file-input')?.click()}
+      >
+        {loading
+          ? <span className="text-gray-500">Processing…</span>
+          : <>Drag &amp; drop a chart here, or <strong>click to select</strong></>
+        }
+        <input
+          id="file-input"
+          type="file"
+          accept="image/*"
+          onChange={onFileChange}
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+          disabled={loading}
+        />
+      </div>
 
-      {loading && <p>Analyzing…</p>}
-      {error && <p className="text-red-500">{error}</p>}
-
-      {raw && (
-        <div className="p-4 bg-gray-100 rounded">
-          <h2 className="font-semibold">Raw Response</h2>
-          <pre className="whitespace-pre-wrap text-sm">{raw}</pre>
-        </div>
+      {error && (
+        <div className="text-red-600">{error}</div>
       )}
 
       {data && (
-        <div className="p-4 bg-white rounded shadow space-y-2">
-          <h2 className="text-xl font-bold">Analysis</h2>
+        <div className="bg-white rounded-lg shadow p-6 space-y-4">
+          <h2 className="text-2xl font-semibold">Analysis</h2>
 
           {data.marketSession && (
-            <p><strong>Market Session:</strong> {data.marketSession}</p>
+            <p><span className="font-medium">Session:</span> {data.marketSession}</p>
           )}
           {data.marketTrend && (
-            <p><strong>Market Trend:</strong> {data.marketTrend}</p>
+            <p><span className="font-medium">Trend:</span> {data.marketTrend}</p>
           )}
           {data.recommendedEntry && (
-            <p><strong>Entry:</strong> {data.recommendedEntry}</p>
+            <p><span className="font-medium">Entry:</span> {data.recommendedEntry}</p>
           )}
           {data.stopLoss && (
-            <p><strong>Stop Loss:</strong> {data.stopLoss}</p>
+            <p><span className="font-medium">Stop Loss:</span> {data.stopLoss}</p>
           )}
           {data.takeProfit && (
-            <p><strong>Take Profit:</strong> {data.takeProfit}</p>
+            <p><span className="font-medium">Take Profit:</span> {data.takeProfit}</p>
           )}
 
-          {Array.isArray(data.fairValueGaps) && (
+          {data.fairValueGaps?.length && (
             <div>
-              <strong>Fair Value Gaps:</strong>
-              <ul className="list-disc ml-6">
-                {data.fairValueGaps.map((g, i) => <li key={i}>{g}</li>)}
+              <span className="font-medium">Fair Value Gaps:</span>
+              <ul className="list-disc ml-5">
+                {data.fairValueGaps.map((gap, i) => (
+                  <li key={i}>{gap}</li>
+                ))}
               </ul>
             </div>
           )}
 
-          {Array.isArray(data.tips) && (
+          {data.tips?.length && (
             <div>
-              <strong>Tips:</strong>
-              <ul className="list-disc ml-6">
-                {data.tips.map((t, i) => <li key={i}>{t}</li>)}
+              <span className="font-medium">Tips:</span>
+              <ul className="list-disc ml-5">
+                {data.tips.map((tip, i) => (
+                  <li key={i}>{tip}</li>
+                ))}
               </ul>
             </div>
           )}
 
-          {Array.isArray(data.otherPatterns) && (
+          {data.otherPatterns?.length && (
             <div>
-              <strong>Other Patterns:</strong>
-              <ul className="list-disc ml-6">
-                {data.otherPatterns.map((p, i) => <li key={i}>{p}</li>)}
+              <span className="font-medium">Other Patterns:</span>
+              <ul className="list-disc ml-5">
+                {data.otherPatterns.map((p, i) => (
+                  <li key={i}>{p}</li>
+                ))}
               </ul>
             </div>
           )}
 
           {data.analysis && (
             <div>
-              <strong>Full Narrative:</strong>
-              <p>{data.analysis}</p>
+              <span className="font-medium">Narrative:</span>
+              <p className="mt-1">{data.analysis}</p>
             </div>
           )}
         </div>
