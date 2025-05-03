@@ -1,57 +1,54 @@
 // src/components/ImageUploader.tsx
 'use client'
 
-import React, { useState, useRef } from 'react'
+import { useState, ChangeEvent } from 'react'
 
-type AnalysisResult = {
-  marketSession: string
-  marketTrend: string
-  recommendedEntry: string
-  stopLoss: string
-  takeProfit: string
-  fairValueGaps: string[]
-  tips: string[]
-  otherPatterns: string[]
-  analysis: string
+interface AnalysisData {
+  marketSession?: string
+  marketTrend?: string
+  recommendedEntry?: string
+  stopLoss?: string
+  takeProfit?: string
+  fairValueGaps?: unknown
+  tips?: unknown
+  otherPatterns?: unknown
+  analysis?: string
+}
+
+function isStringArray(maybe: unknown): maybe is string[] {
+  return Array.isArray(maybe) && maybe.every(item => typeof item === 'string')
 }
 
 export default function ImageUploader() {
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const [file, setFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
+  const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null)
+  const [raw, setRaw] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [result, setResult] = useState<AnalysisResult | null>(null)
 
-  function onSelectFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0] ?? null
-    setFile(f)
-    setResult(null)
+  async function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
     setError(null)
-  }
+    setRaw(null)
+    setAnalysisData(null)
 
-  async function onAnalyze() {
+    const file = e.target.files?.[0] ?? null
     if (!file) return
-    setLoading(true)
-    setError(null)
-    setResult(null)
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
 
-      const res = await fetch('/api/analyze', {
-        method: 'POST',
-        body: formData,
-      })
+    setLoading(true)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch('/api/analyze', { method: 'POST', body: form })
+      const data = await res.json()
+
       if (!res.ok) {
-        throw new Error(await res.text())
+        setError(data.error || 'Analysis failed')
+      } else if ('raw' in data) {
+        setRaw(data.raw)
+      } else {
+        setAnalysisData(data as AnalysisData)
       }
-      const json = (await res.json()) as AnalysisResult
-      setResult(json)
-    } catch (err: unknown) {
-      // Safely extract a string message
-      const message =
-        err instanceof Error ? err.message : String(err)
-      setError(message)
+    } catch (err: any) {
+      setError(err.message || 'Network error')
     } finally {
       setLoading(false)
     }
@@ -59,75 +56,92 @@ export default function ImageUploader() {
 
   return (
     <div className="space-y-4">
-      {/* Drop zone / click-to-select */}
-      <div
-        className="border-2 border-blue-500 rounded h-48 flex items-center justify-center cursor-pointer bg-white"
-        onClick={() => fileInputRef.current?.click()}
-      >
-        {file ? file.name : 'Drag & drop a chart image here, or click to select'}
-      </div>
       <input
         type="file"
         accept="image/*"
-        className="hidden"
-        ref={fileInputRef}
-        onChange={onSelectFile}
+        onChange={handleFileChange}
+        className="block"
       />
 
-      {/* Analyze button */}
-      <button
-        onClick={onAnalyze}
-        disabled={!file || loading}
-        className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
-      >
-        {loading ? 'Analyzing…' : 'Analyze Chart'}
-      </button>
-
-      {/* Error */}
+      {loading && <p>Analyzing…</p>}
       {error && <p className="text-red-500">{error}</p>}
 
-      {/* Results */}
-      {result && (
-        <div className="bg-gray-50 p-6 rounded shadow space-y-4">
-          <h2 className="text-2xl font-bold">📊 Chart Analysis</h2>
+      {raw && (
+        <div className="p-4 bg-gray-100 rounded">
+          <h2 className="font-semibold">Raw Response</h2>
+          <pre className="whitespace-pre-wrap text-sm">{raw}</pre>
+        </div>
+      )}
 
-          <p><strong>Market Session:</strong> {result.marketSession}</p>
-          <p><strong>Market Trend:</strong> {result.marketTrend}</p>
-          <p><strong>Recommended Entry:</strong> {result.recommendedEntry}</p>
-          <p><strong>Stop Loss:</strong> {result.stopLoss}</p>
-          <p><strong>Take Profit:</strong> {result.takeProfit}</p>
+      {analysisData && (
+        <div className="p-4 bg-white rounded shadow space-y-2">
+          <h2 className="text-xl font-bold">Analysis</h2>
 
-          <div>
-            <strong>Fair Value Gaps:</strong>
-            <ul className="list-disc list-inside ml-4">
-              {result.fairValueGaps.map((gap, i) => (
-                <li key={i}>{gap}</li>
-              ))}
-            </ul>
-          </div>
+          {analysisData.marketSession && (
+            <p>
+              <strong>Market Session:</strong> {analysisData.marketSession}
+            </p>
+          )}
+          {analysisData.marketTrend && (
+            <p>
+              <strong>Market Trend:</strong> {analysisData.marketTrend}
+            </p>
+          )}
+          {analysisData.recommendedEntry && (
+            <p>
+              <strong>Recommended Entry:</strong> {analysisData.recommendedEntry}
+            </p>
+          )}
+          {analysisData.stopLoss && (
+            <p>
+              <strong>Stop Loss:</strong> {analysisData.stopLoss}
+            </p>
+          )}
+          {analysisData.takeProfit && (
+            <p>
+              <strong>Take Profit:</strong> {analysisData.takeProfit}
+            </p>
+          )}
 
-          <div>
-            <strong>Tips:</strong>
-            <ul className="list-disc list-inside ml-4">
-              {result.tips.map((tip, i) => (
-                <li key={i}>{tip}</li>
-              ))}
-            </ul>
-          </div>
+          {isStringArray(analysisData.fairValueGaps) && (
+            <div>
+              <strong>Fair Value Gaps:</strong>
+              <ul className="list-disc ml-6">
+                {analysisData.fairValueGaps.map((gap, i) => (
+                  <li key={i}>{gap}</li>
+                ))}
+              </ul>
+            </div>
+          )}
 
-          <div>
-            <strong>Other Patterns:</strong>
-            <ul className="list-disc list-inside ml-4">
-              {result.otherPatterns.map((pat, i) => (
-                <li key={i}>{pat}</li>
-              ))}
-            </ul>
-          </div>
+          {isStringArray(analysisData.tips) && (
+            <div>
+              <strong>Tips:</strong>
+              <ul className="list-disc ml-6">
+                {analysisData.tips.map((tip, i) => (
+                  <li key={i}>{tip}</li>
+                ))}
+              </ul>
+            </div>
+          )}
 
-          <div>
-            <strong>Full Narrative:</strong>
-            <p className="whitespace-pre-wrap">{result.analysis}</p>
-          </div>
+          {isStringArray(analysisData.otherPatterns) && (
+            <div>
+              <strong>Other Patterns:</strong>
+              <ul className="list-disc ml-6">
+                {analysisData.otherPatterns.map((pat, i) => (
+                  <li key={i}>{pat}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {analysisData.analysis && (
+            <div>
+              <strong>Full Narrative:</strong>
+              <p>{analysisData.analysis}</p>
+            </div>
+          )}
         </div>
       )}
     </div>
