@@ -9,26 +9,22 @@ interface AnalysisData {
   recommendedEntry?: string
   stopLoss?: string
   takeProfit?: string
-  fairValueGaps?: unknown
-  tips?: unknown
-  otherPatterns?: unknown
+  fairValueGaps?: string[]
+  tips?: string[]
+  otherPatterns?: string[]
   analysis?: string
-}
-
-function isStringArray(maybe: unknown): maybe is string[] {
-  return Array.isArray(maybe) && maybe.every(item => typeof item === 'string')
 }
 
 export default function ImageUploader() {
   const [loading, setLoading] = useState(false)
-  const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null)
+  const [data, setData] = useState<AnalysisData | null>(null)
   const [raw, setRaw] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   async function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
     setError(null)
     setRaw(null)
-    setAnalysisData(null)
+    setData(null)
 
     const file = e.target.files?.[0] ?? null
     if (!file) return
@@ -38,17 +34,17 @@ export default function ImageUploader() {
       const form = new FormData()
       form.append('file', file)
       const res = await fetch('/api/analyze', { method: 'POST', body: form })
-      const data = await res.json()
+      const json = await res.json()
 
       if (!res.ok) {
-        setError(data.error || 'Analysis failed')
-      } else if ('raw' in data) {
-        setRaw(data.raw)
+        setError(json.error || 'Analysis failed')
+      } else if ('raw' in json) {
+        setRaw(json.raw)
       } else {
-        setAnalysisData(data as AnalysisData)
+        setData(json as AnalysisData)
       }
-    } catch (err: any) {
-      setError(err.message || 'Network error')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Network error')
     } finally {
       setLoading(false)
     }
@@ -73,73 +69,57 @@ export default function ImageUploader() {
         </div>
       )}
 
-      {analysisData && (
+      {data && (
         <div className="p-4 bg-white rounded shadow space-y-2">
           <h2 className="text-xl font-bold">Analysis</h2>
 
-          {analysisData.marketSession && (
-            <p>
-              <strong>Market Session:</strong> {analysisData.marketSession}
-            </p>
+          {data.marketSession && (
+            <p><strong>Market Session:</strong> {data.marketSession}</p>
           )}
-          {analysisData.marketTrend && (
-            <p>
-              <strong>Market Trend:</strong> {analysisData.marketTrend}
-            </p>
+          {data.marketTrend && (
+            <p><strong>Market Trend:</strong> {data.marketTrend}</p>
           )}
-          {analysisData.recommendedEntry && (
-            <p>
-              <strong>Recommended Entry:</strong> {analysisData.recommendedEntry}
-            </p>
+          {data.recommendedEntry && (
+            <p><strong>Entry:</strong> {data.recommendedEntry}</p>
           )}
-          {analysisData.stopLoss && (
-            <p>
-              <strong>Stop Loss:</strong> {analysisData.stopLoss}
-            </p>
+          {data.stopLoss && (
+            <p><strong>Stop Loss:</strong> {data.stopLoss}</p>
           )}
-          {analysisData.takeProfit && (
-            <p>
-              <strong>Take Profit:</strong> {analysisData.takeProfit}
-            </p>
+          {data.takeProfit && (
+            <p><strong>Take Profit:</strong> {data.takeProfit}</p>
           )}
 
-          {isStringArray(analysisData.fairValueGaps) && (
+          {Array.isArray(data.fairValueGaps) && (
             <div>
               <strong>Fair Value Gaps:</strong>
               <ul className="list-disc ml-6">
-                {analysisData.fairValueGaps.map((gap, i) => (
-                  <li key={i}>{gap}</li>
-                ))}
+                {data.fairValueGaps.map((g, i) => <li key={i}>{g}</li>)}
               </ul>
             </div>
           )}
 
-          {isStringArray(analysisData.tips) && (
+          {Array.isArray(data.tips) && (
             <div>
               <strong>Tips:</strong>
               <ul className="list-disc ml-6">
-                {analysisData.tips.map((tip, i) => (
-                  <li key={i}>{tip}</li>
-                ))}
+                {data.tips.map((t, i) => <li key={i}>{t}</li>)}
               </ul>
             </div>
           )}
 
-          {isStringArray(analysisData.otherPatterns) && (
+          {Array.isArray(data.otherPatterns) && (
             <div>
               <strong>Other Patterns:</strong>
               <ul className="list-disc ml-6">
-                {analysisData.otherPatterns.map((pat, i) => (
-                  <li key={i}>{pat}</li>
-                ))}
+                {data.otherPatterns.map((p, i) => <li key={i}>{p}</li>)}
               </ul>
             </div>
           )}
 
-          {analysisData.analysis && (
+          {data.analysis && (
             <div>
               <strong>Full Narrative:</strong>
-              <p>{analysisData.analysis}</p>
+              <p>{data.analysis}</p>
             </div>
           )}
         </div>
