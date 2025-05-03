@@ -5,7 +5,7 @@ import { Configuration, OpenAIApi } from 'openai'
 export const runtime = 'edge'
 
 export async function POST(request: Request) {
-  // 1) Receive the uploaded file
+  // 1) Parse the uploaded file
   const formData = await request.formData()
   const file = formData.get('file') as File
   if (!file) {
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
   const b64 = Buffer.from(arrayBuffer).toString('base64')
   const imageDataUri = `data:${file.type};base64,${b64}`
 
-  // 3) Call ChatGPT Vision (you need OPENAI_API_KEY in your env)
+  // 3) Call ChatGPT Vision
   const openai = new OpenAIApi(
     new Configuration({ apiKey: process.env.OPENAI_API_KEY })
   )
@@ -27,4 +27,45 @@ export async function POST(request: Request) {
     messages: [
       {
         role: 'system',
-        content: `
+        content: `You are a pro day-trading coach.
+Given only a chart image, return JSON with these fields:
+• marketSession
+• marketTrend
+• recommendedEntry
+• stopLoss
+• takeProfit
+• fairValueGaps
+• tips
+• otherPatterns
+• analysis
+
+Output only valid JSON (no extra text).`,
+      },
+      {
+        role: 'user',
+        content: `Chart: ${imageDataUri}`,
+      },
+    ],
+    max_tokens: 500,
+  })
+
+  // 4) Handle API errors
+  if (!completion.ok) {
+    const errText = await completion.text()
+    return NextResponse.json({ error: errText }, { status: completion.status })
+  }
+
+  // 5) Parse the JSON out of the model’s reply
+  const { choices } = await completion.json()
+  const text = choices?.[0]?.message?.content || ''
+  let data
+  try {
+    data = JSON.parse(text)
+  } catch {
+    // fallback if it wasn’t strictly JSON
+    data = { raw: text }
+  }
+
+  // 6) Return structured JSON
+  return NextResponse.json(data)
+}
