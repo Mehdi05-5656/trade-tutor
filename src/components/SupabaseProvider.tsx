@@ -1,25 +1,25 @@
-'use client';
+// src/components/SupabaseProvider.tsx
+'use client'
 
-import { createClient } from '@supabase/supabase-js';
-import { SessionContextProvider } from '@supabase/auth-helpers-react';
-import { useState } from 'react';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { SessionContextProvider } from '@supabase/auth-helpers-react'
+import { useState } from 'react'
 
 export default function SupabaseProvider({
   children,
 }: {
-  children: React.ReactNode;
+  children: React.ReactNode
 }) {
   const [supabase] = useState(() =>
-    createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { auth: { persistSession: true } }
-    )
-  );
+    createClientComponentClient({
+      supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    })
+  )
 
   return (
     <SessionContextProvider supabaseClient={supabase}>
       {children}
     </SessionContextProvider>
-  );
+  )
 }
