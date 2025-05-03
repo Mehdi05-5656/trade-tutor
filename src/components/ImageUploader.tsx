@@ -21,7 +21,7 @@ export default function ImageUploader() {
   const [data, setData] = useState<AnalysisData | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const handleFiles = useCallback(async (file: File) => {
+  const handleFile = useCallback(async (file: File) => {
     setError(null)
     setData(null)
     setLoading(true)
@@ -30,14 +30,15 @@ export default function ImageUploader() {
     form.append('file', file)
 
     try {
-      const res = await fetch('/api/analyze', { method: 'POST', body: form })
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        body: form,
+      })
       const json = await res.json()
-
       if (!res.ok) {
         throw new Error(json.error || 'Analysis failed')
       }
-      // if the API returned { raw: string } it will show under `.analysis`
-      setData(json)
+      setData(json as AnalysisData)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Network error')
     } finally {
@@ -49,7 +50,7 @@ export default function ImageUploader() {
     e.preventDefault()
     setDragOver(false)
     const file = e.dataTransfer.files[0]
-    if (file) handleFiles(file)
+    if (file) handleFile(file)
   }
 
   function onDragOver(e: DragEvent<HTMLDivElement>) {
@@ -63,7 +64,7 @@ export default function ImageUploader() {
 
   function onFileChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
-    if (file) handleFiles(file)
+    if (file) handleFile(file)
   }
 
   return (
@@ -72,15 +73,15 @@ export default function ImageUploader() {
         onDrop={onDrop}
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
+        onClick={() => document.getElementById('file-input')?.click()}
         className={`relative border-2 border-dashed rounded-lg p-16 text-center cursor-pointer transition 
           ${dragOver ? 'border-blue-500 bg-blue-50' : 'border-gray-300 bg-white'}
           ${loading ? 'opacity-50 pointer-events-none' : ''}
         `}
-        onClick={() => document.getElementById('file-input')?.click()}
       >
         {loading
           ? <span className="text-gray-500">Processing…</span>
-          : <>Drag &amp; drop a chart here, or <strong>click to select</strong></>
+          : <>Drag & drop a chart here, or <strong>click to select</strong></>
         }
         <input
           id="file-input"
@@ -99,26 +100,24 @@ export default function ImageUploader() {
       {data && (
         <div className="bg-white rounded-lg shadow p-6 space-y-4">
           <h2 className="text-2xl font-semibold">Analysis</h2>
-
           {data.marketSession && (
-            <p><span className="font-medium">Session:</span> {data.marketSession}</p>
+            <p><strong>Session:</strong> {data.marketSession}</p>
           )}
           {data.marketTrend && (
-            <p><span className="font-medium">Trend:</span> {data.marketTrend}</p>
+            <p><strong>Trend:</strong> {data.marketTrend}</p>
           )}
           {data.recommendedEntry && (
-            <p><span className="font-medium">Entry:</span> {data.recommendedEntry}</p>
+            <p><strong>Entry:</strong> {data.recommendedEntry}</p>
           )}
           {data.stopLoss && (
-            <p><span className="font-medium">Stop Loss:</span> {data.stopLoss}</p>
+            <p><strong>Stop Loss:</strong> {data.stopLoss}</p>
           )}
           {data.takeProfit && (
-            <p><span className="font-medium">Take Profit:</span> {data.takeProfit}</p>
+            <p><strong>Take Profit:</strong> {data.takeProfit}</p>
           )}
-
           {data.fairValueGaps?.length && (
             <div>
-              <span className="font-medium">Fair Value Gaps:</span>
+              <strong>Fair Value Gaps:</strong>
               <ul className="list-disc ml-5">
                 {data.fairValueGaps.map((gap, i) => (
                   <li key={i}>{gap}</li>
@@ -126,10 +125,9 @@ export default function ImageUploader() {
               </ul>
             </div>
           )}
-
           {data.tips?.length && (
             <div>
-              <span className="font-medium">Tips:</span>
+              <strong>Tips:</strong>
               <ul className="list-disc ml-5">
                 {data.tips.map((tip, i) => (
                   <li key={i}>{tip}</li>
@@ -137,10 +135,9 @@ export default function ImageUploader() {
               </ul>
             </div>
           )}
-
           {data.otherPatterns?.length && (
             <div>
-              <span className="font-medium">Other Patterns:</span>
+              <strong>Other Patterns:</strong>
               <ul className="list-disc ml-5">
                 {data.otherPatterns.map((p, i) => (
                   <li key={i}>{p}</li>
@@ -148,11 +145,10 @@ export default function ImageUploader() {
               </ul>
             </div>
           )}
-
           {data.analysis && (
             <div>
-              <span className="font-medium">Narrative:</span>
-              <p className="mt-1">{data.analysis}</p>
+              <strong>Narrative:</strong>
+              <p>{data.analysis}</p>
             </div>
           )}
         </div>
