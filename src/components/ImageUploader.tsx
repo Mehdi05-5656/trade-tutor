@@ -1,6 +1,7 @@
+// src/components/ImageUploader.tsx
 'use client';
 
-import { useCallback, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 
 type Analysis = {
@@ -28,8 +29,12 @@ export default function ImageUploader() {
       if (!res.ok) throw new Error(await res.text());
       const data: Analysis = await res.json();
       setAnalysis(data);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError(String(err));
+      }
     } finally {
       setLoading(false);
     }
