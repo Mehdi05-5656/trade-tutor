@@ -1,69 +1,63 @@
 // src/app/api/analyze/route.ts
 import { NextResponse } from 'next/server'
+import Replicate from 'replicate'
 
 export const runtime = 'edge'
 
 export async function POST(req: Request) {
-  // 1) Receive the uploaded file
+  // 1. Get the uploaded file
   const formData = await req.formData()
   const file = formData.get('file') as File
   if (!file) {
+    return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
+  }
+
+  // 2. Upload the file to Replicate and grab its public URL
+  const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN! })
+  const fileRes = await replicate.files.create(file)
+  const imageUrl = fileRes.urls.get
+  if (!imageUrl) {
     return NextResponse.json(
-      { error: 'No file uploaded' },
-      { status: 400 }
+      { error: 'Failed to upload image' },
+      { status: 502 }
     )
   }
 
-  // 2) Read & encode as base64 Data URI
-  const arrayBuffer = await file.arrayBuffer()
-  const uint8 = new Uint8Array(arrayBuffer)
-  let binary = ''
-  for (const b of uint8) binary += String.fromCharCode(b)
-  const b64 = btoa(binary)
-  const imageDataUri = `data:${file.type};base64,${b64}`
-
-  // 3) Call the OpenAI Chat API via fetch
-  const apiRes = await fetch(
-    'https://api.openai.com/v1/chat/completions',
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY!}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content: `
+  // 3. Build your prompt (just the URL now)
+  const systemMessage = `
 You are a lightning-fast, pixel-perfect day-trading coach.
-You will be shown only a chart image and nothing else.
-Inspect the chart visually and extract exact price and time values — do not invent or estimate.
+You will be shown only a chart image URL and nothing else.
+Inspect the chart visually and extract exact price and time values—do not invent or estimate.
 Return strictly valid JSON with these keys:
   marketSession, marketTrend, recommendedEntry, stopLoss, takeProfit,
   fairValueGaps, tips, otherPatterns, analysis
 No commentary, no markdown—only the JSON object.
-            `.trim(),
-          },
-          {
-            role: 'user',
-            content: `Chart image (base64 URI):\n${imageDataUri}`,
-          },
-        ],
-        max_tokens: 500,
-      }),
-    }
-  )
+  `.trim()
 
+  const userMessage = `Chart image URL: ${imageUrl}`
+
+  // 4. Call OpenAI’s chat endpoint via fetch
+  const apiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY!}`,
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemMessage },
+        { role: 'user', content: userMessage },
+      ],
+      max_tokens: 500,
+    }),
+  })
   if (!apiRes.ok) {
     const errText = await apiRes.text()
-    return NextResponse.json(
-      { error: errText },
-      { status: apiRes.status }
-    )
+    return NextResponse.json({ error: errText }, { status: apiRes.status })
   }
 
+  // 5. Parse and return
   const json = await apiRes.json()
   const text = json.choices?.[0]?.message?.content || ''
   let data
