@@ -1,10 +1,9 @@
 // src/app/api/analyze/route.ts
 import { NextResponse } from 'next/server'
-import OpenAI from 'openai-edge'   // correct default import
 
 export const runtime = 'edge'
 
-export async function POST(req: Request) {  // renamed from `request`
+export async function POST(req: Request) {
   // 1) Receive the uploaded file
   const formData = await req.formData()
   const file = formData.get('file') as File
@@ -23,7 +22,7 @@ export async function POST(req: Request) {  // renamed from `request`
   const b64 = btoa(binary)
   const imageDataUri = `data:${file.type};base64,${b64}`
 
-  // 3) Call the OpenAI API via fetch
+  // 3) Call the OpenAI Chat API via fetch
   const apiRes = await fetch(
     'https://api.openai.com/v1/chat/completions',
     {
@@ -41,7 +40,7 @@ export async function POST(req: Request) {  // renamed from `request`
 You are a lightning-fast, pixel-perfect day-trading coach.
 You will be shown only a chart image and nothing else.
 Inspect the chart visually and extract exact price and time values — do not invent or estimate.
-Return **strictly valid JSON** with these keys:
+Return strictly valid JSON with these keys:
   marketSession, marketTrend, recommendedEntry, stopLoss, takeProfit,
   fairValueGaps, tips, otherPatterns, analysis
 No commentary, no markdown—only the JSON object.
