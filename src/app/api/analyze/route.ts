@@ -1,77 +1,70 @@
 // src/app/api/analyze/route.ts
-import { NextResponse } from 'next/server'
+import { NextResponse } from "next/server";
+import Replicate from "replicate";
 
-export const runtime = 'edge'
+export const runtime = "edge";
 
 export async function POST(request: Request) {
-  // 1) Get the uploaded file
-  const formData = await request.formData()
-  const file = formData.get('file') as File
+  // 1) Receive the image file
+  const formData = await request.formData();
+  const file = formData.get("file") as File;
   if (!file) {
-    return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
+    return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
   }
 
-  // 2) Convert it to a base64 Data URI
-  const arrayBuffer = await file.arrayBuffer()
-  const uint8 = new Uint8Array(arrayBuffer)
-  let binary = ''
-  for (let i = 0; i < uint8.length; i++) {
-    binary += String.fromCharCode(uint8[i])
-  }
-  const b64 = btoa(binary)
-  const imageDataUri = `data:${file.type};base64,${b64}`
+  // 2) Upload to Replicate’s file store
+  const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN! });
+  const fileRes = await replicate.files.create(file);
+  const imageUrl = fileRes.urls.get;  // publicly accessible URL
 
-  // 3) Prepare messages for ChatGPT
+  // 3) Build the prompt (tiny now, just the URL)
   const systemMessage = `
-You are a pro day-trading coach.
-Given only a chart image, return JSON with exactly these fields:
-  • marketSession
-  • marketTrend
-  • recommendedEntry
-  • stopLoss
-  • takeProfit
-  • fairValueGaps
-  • tips
-  • otherPatterns
+You are a pro day‐trading coach.
+Given only a chart image URL, return **only** valid JSON with these keys:
+  • marketSession  
+  • marketTrend  
+  • recommendedEntry  
+  • stopLoss  
+  • takeProfit  
+  • fairValueGaps  
+  • tips  
+  • otherPatterns  
   • analysis
+  `.trim();
 
-Output only valid JSON (no extraneous text).
-  `.trim()
+  const userMessage = `Chart image URL: ${imageUrl}`;
 
-  const userMessage = `Chart: ${imageDataUri}`
-
-  // 4) Call the OpenAI Chat Completions API via fetch
-  const apiRes = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
+  // 4) Ask ChatGPT via REST (no bulky base64!)
+  const apiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       Authorization: `Bearer ${process.env.OPENAI_API_KEY!}`,
     },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
+      model: "gpt-4o-mini",
       messages: [
-        { role: 'system', content: systemMessage },
-        { role: 'user', content: userMessage },
+        { role: "system", content: systemMessage },
+        { role: "user", content: userMessage },
       ],
       max_tokens: 500,
     }),
-  })
+  });
 
   if (!apiRes.ok) {
-    const errText = await apiRes.text()
-    return NextResponse.json({ error: errText }, { status: apiRes.status })
+    const errText = await apiRes.text();
+    return NextResponse.json({ error: errText }, { status: apiRes.status });
   }
 
-  const json = await apiRes.json()
-  const text = json.choices?.[0]?.message?.content || ''
-  let data
+  const json = await apiRes.json();
+  const text = json.choices?.[0]?.message?.content || "";
+  let data;
   try {
-    data = JSON.parse(text)
+    data = JSON.parse(text);
   } catch {
-    // fallback if the response wasn’t strict JSON
-    data = { raw: text }
+    data = { raw: text };
   }
 
-  // 5) Return the parsed JSON
-  return NextResponse.json(data)
+  // 5) Return it to the client
+  return NextResponse.json(data);
 }
