@@ -1,37 +1,28 @@
 // src/app/api/analyze/route.ts
-import { NextResponse } from "next/server";
-import OpenAI from "openai-edge";
+import { NextResponse } from 'next/server'
 
-export const runtime = "edge";
-
-// Initialize the Edge-compatible client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-});
+export const runtime = 'edge'
 
 export async function POST(request: Request) {
   // 1) Get the uploaded file
-  const formData = await request.formData();
-  const file = formData.get("file") as File;
+  const formData = await request.formData()
+  const file = formData.get('file') as File
   if (!file) {
-    return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
+    return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
   }
 
-  // 2) Read and encode as base64 Data URI
-  const arrayBuffer = await file.arrayBuffer();
-  const bytes = new Uint8Array(arrayBuffer);
-  let binary = "";
-  for (const b of bytes) binary += String.fromCharCode(b);
-  const b64 = btoa(binary);
-  const imageDataUri = `data:${file.type};base64,${b64}`;
+  // 2) Convert it to a base64 Data URI
+  const arrayBuffer = await file.arrayBuffer()
+  const uint8 = new Uint8Array(arrayBuffer)
+  let binary = ''
+  for (let i = 0; i < uint8.length; i++) {
+    binary += String.fromCharCode(uint8[i])
+  }
+  const b64 = btoa(binary)
+  const imageDataUri = `data:${file.type};base64,${b64}`
 
-  // 3) Ask GPT-4o Mini to analyze your chart
-  const resp = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [
-      {
-        role: "system",
-        content: `
+  // 3) Prepare messages for ChatGPT
+  const systemMessage = `
 You are a pro day-trading coach.
 Given only a chart image, return JSON with exactly these fields:
   • marketSession
@@ -45,26 +36,42 @@ Given only a chart image, return JSON with exactly these fields:
   • analysis
 
 Output only valid JSON (no extraneous text).
-        `.trim(),
-      },
-      {
-        role: "user",
-        content: `Chart: ${imageDataUri}`,
-      },
-    ],
-    max_tokens: 500,
-  });
+  `.trim()
 
-  // 4) Pull out the raw text
-  const text = resp.choices?.[0]?.message?.content || "";
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    // If not strict JSON, fall back to a raw field
-    data = { raw: text };
+  const userMessage = `Chart: ${imageDataUri}`
+
+  // 4) Call the OpenAI Chat Completions API via fetch
+  const apiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY!}`,
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemMessage },
+        { role: 'user', content: userMessage },
+      ],
+      max_tokens: 500,
+    }),
+  })
+
+  if (!apiRes.ok) {
+    const errText = await apiRes.text()
+    return NextResponse.json({ error: errText }, { status: apiRes.status })
   }
 
-  // 5) Return JSON to the client
-  return NextResponse.json(data);
+  const json = await apiRes.json()
+  const text = json.choices?.[0]?.message?.content || ''
+  let data
+  try {
+    data = JSON.parse(text)
+  } catch {
+    // fallback if the response wasn’t strict JSON
+    data = { raw: text }
+  }
+
+  // 5) Return the parsed JSON
+  return NextResponse.json(data)
 }
