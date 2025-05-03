@@ -45,10 +45,13 @@ export default function ImageUploader() {
       if (!res.ok) {
         throw new Error(await res.text())
       }
-      const json = await res.json() as AnalysisResult
+      const json = (await res.json()) as AnalysisResult
       setResult(json)
-    } catch (err: any) {
-      setError(err.message || 'Unknown error')
+    } catch (err: unknown) {
+      // Safely extract a string message
+      const message =
+        err instanceof Error ? err.message : String(err)
+      setError(message)
     } finally {
       setLoading(false)
     }
